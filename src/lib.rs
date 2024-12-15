@@ -67,12 +67,7 @@ impl Config {
 pub fn run(config: Config) -> Result<(), ApplicationError> {
     for file_path in config.file_paths {
         let content = fs::read_to_string(file_path).map_err(|_| ApplicationError::FileNotFound)?;
-
-        let results = if config.ignore_case {
-            search_case_insensitive(&config.query, &content)
-        } else {
-            search(&config.query, &content)
-        };
+        let results = search(&config.query, &content, config.ignore_case);
 
         if results.is_empty() {
             continue;
@@ -90,24 +85,19 @@ pub fn run(config: Config) -> Result<(), ApplicationError> {
     Ok(())
 }
 
-pub fn search<'a>(query: &str, content: &'a str) -> Vec<(usize, &'a str)> {
-    let mut results = Vec::new();
-
-    for (line_num, line) in content.lines().enumerate() {
-        if line.contains(query) {
-            results.push((line_num + 1, line));
-        }
+pub fn compare_lines(query: &str, line: &str, ignore_case: bool) -> bool {
+    if ignore_case {
+        line.to_lowercase().contains(&query.to_lowercase())
+    } else {
+        line.contains(query)
     }
-
-    results
 }
 
-pub fn search_case_insensitive<'a>(query: &str, content: &'a str) -> Vec<(usize, &'a str)> {
+pub fn search<'a>(query: &str, content: &'a str, ignore_case: bool) -> Vec<(usize, &'a str)> {
     let mut results = Vec::new();
-    let query = &query.to_lowercase();
 
     for (line_num, line) in content.lines().enumerate() {
-        if line.to_lowercase().contains(query) {
+        if compare_lines(query, line, ignore_case) {
             results.push((line_num + 1, line));
         }
     }
@@ -198,6 +188,24 @@ mod tests {
     }
 
     #[test]
+    fn compare_lines_case_sensitive() {
+        let query = "duct";
+        let line = "duct tape";
+        assert!(compare_lines(query, line, false));
+        let line2 = "Duct tape";
+        assert!(!compare_lines(query, line2, false));
+    }
+
+    #[test]
+    fn compare_lines_case_insensitive() {
+        let query = "rUsT";
+        let line = "Rust is great";
+        assert!(compare_lines(query, line, true));
+        let line2 = "rust is great";
+        assert!(compare_lines(query, line2, true));
+    }
+
+    #[test]
     fn case_sensitive() {
         let query = "duct";
         let content = "\
@@ -206,13 +214,16 @@ safe, fast, productive.
 Pick three.
 Duct tape.";
 
-        assert_eq!(vec![(2, "safe, fast, productive.")], search(query, content));
+        assert_eq!(
+            vec![(2, "safe, fast, productive.")],
+            search(query, content, false)
+        );
     }
 
     #[test]
     fn case_insensitive() {
         let query = "rUsT";
-        let contents = "\
+        let content = "\
 Rust:
 safe, fast, productive.
 Pick three.
@@ -220,7 +231,7 @@ Trust me.";
 
         assert_eq!(
             vec![(1, "Rust:"), (4, "Trust me.")],
-            search_case_insensitive(query, contents)
+            search(query, content, true)
         );
     }
 }
