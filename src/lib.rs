@@ -66,6 +66,8 @@ impl Config {
 
 pub fn run(config: Config) -> Result<(), ApplicationError> {
     for file_path in config.file_paths {
+        println!("File: {}", file_path);
+
         let content = fs::read_to_string(file_path).map_err(|_| ApplicationError::FileNotFound)?;
         let results = search(&config.query, &content, config.ignore_case);
 
@@ -80,6 +82,8 @@ pub fn run(config: Config) -> Result<(), ApplicationError> {
                 println!("{}", line);
             }
         }
+        
+        println!();
     }
 
     Ok(())
