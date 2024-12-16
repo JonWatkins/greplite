@@ -1,8 +1,9 @@
 name: Build and Release
 
 on:
-  release:
-    types: [created]
+  push:
+    tags:
+      - 'v*'
 
 jobs:
   build:
@@ -18,6 +19,12 @@ jobs:
 
     - name: Add target
       run: rustup target add ${{ matrix.target }}
+
+    - name: Install MinGW (for Windows target)
+      if: matrix.target == 'x86_64-pc-windows-gnu'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y mingw-w64      
 
     - name: Build for ${{ matrix.target }}
       run: cargo build --release --target ${{ matrix.target }}
