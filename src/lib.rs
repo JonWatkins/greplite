@@ -82,14 +82,14 @@ pub fn run(config: Config) -> Result<(), ApplicationError> {
                 println!("{}", line);
             }
         }
-        
+
         println!();
     }
 
     Ok(())
 }
 
-pub fn compare_lines(query: &str, line: &str, ignore_case: bool) -> bool {
+fn compare_lines(query: &str, line: &str, ignore_case: bool) -> bool {
     if ignore_case {
         line.to_lowercase().contains(&query.to_lowercase())
     } else {
@@ -97,7 +97,7 @@ pub fn compare_lines(query: &str, line: &str, ignore_case: bool) -> bool {
     }
 }
 
-pub fn search<'a>(query: &str, content: &'a str, ignore_case: bool) -> Vec<(usize, &'a str)> {
+fn search<'a>(query: &str, content: &'a str, ignore_case: bool) -> Vec<(usize, &'a str)> {
     let mut results = Vec::new();
 
     for (line_num, line) in content.lines().enumerate() {
@@ -109,7 +109,7 @@ pub fn search<'a>(query: &str, content: &'a str, ignore_case: bool) -> Vec<(usiz
     results
 }
 
-pub fn print_help() {
+fn print_help() {
     println!("TinyGrep - A simplified version of the `grep` command");
     println!();
     println!("Usage:");
