@@ -1,46 +1,41 @@
-name: Release Binaries
+name: Build and Release
 
 on:
-  release:
-    types: [created]
-
-env:
-  CARGO_TERM_COLOR: always
+  push:
+    branches:
+      - main
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
-    strategy:
-      matrix:
-        include:
-          - target: x86_64-pc-windows-gnu
-            archive: zip
-          - target: x86_64-unknown-linux-musl
-            archive: tar.gz,tar.xz,tar.zst
-          - target: x86_64-apple-darwin
-            archive: zip    
-
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out the repository
+        uses: actions/checkout@v3
 
-      - name: Install necessary dependencies for cross-compilation
+      - name: Set up Rust
+        uses: actions/setup-rust@v1
+        with:
+          rust-version: stable
+
+      - name: Install cross
+        run: cargo install cross
+
+      - name: Build with cross
         run: |
-          if [ "${{ matrix.target }}" == "x86_64-pc-windows-gnu" ]; then
-            sudo apt-get install -y mingw-w64
-          elif [ "${{ matrix.target }}" == "x86_64-apple-darwin" ]; then
-            sudo apt-get install -y clang
-            rustup target add ${{ matrix.target }}
-          fi
+          cross build --release --target x86_64-unknown-linux-gnu
+          cross build --release --target x86_64-apple-darwin
+          cross build --release --target x86_64-pc-windows-gnu
 
-      - name: Install Rust target
-        run: rustup target add ${{ matrix.target }}
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: release-artifacts
+          path: target/*/release/*
 
-      - name: Build for ${{ matrix.target }}
-        run: cargo build --release --target ${{ matrix.target }}
-
-      - name: Upload release binaries to GitHub
+      - name: Create GitHub release
         uses: ncipollo/release-action@v1
         with:
-          files: |
-            target/${{ matrix.target }}/release/tinygrep-${{ matrix.target }}.${{ matrix.archive }}
+          files: target/x86_64-unknown-linux-gnu/release/my_project.tar.gz,target/x86_64-apple-darwin/release/my_project.tar.gz,target/x86_64-pc-windows-gnu/release/my_project.tar.gz
+          tag: ${{ github.sha }}
+          token: ${{ secrets.GITHUB_TOKEN }}
