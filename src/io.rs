@@ -52,7 +52,7 @@ pub fn process_directory(
     Ok(())
 }
 
-pub fn print_results(
+fn print_results(
     config: &Config,
     source: &str,
     results: Vec<(usize, &str)>,

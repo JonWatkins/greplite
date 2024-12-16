@@ -1,6 +1,6 @@
 use regex::Regex;
 
-pub fn compare_lines(query: &str, line: &str, ignore_case: bool, regex: &Option<Regex>) -> bool {
+fn compare_lines(query: &str, line: &str, ignore_case: bool, regex: &Option<Regex>) -> bool {
     if let Some(regex) = regex {
         regex.is_match(line)
     } else {

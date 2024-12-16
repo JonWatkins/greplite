@@ -3,11 +3,11 @@ use regex::Regex;
 const HIGHLIGHT_START: &str = "\x1b[1;33m";
 const HIGHLIGHT_END: &str = "\x1b[0m";
 
-pub fn apply_highlight(text: &str) -> String {
+fn apply_highlight(text: &str) -> String {
     format!("{}{}{}", HIGHLIGHT_START, text, HIGHLIGHT_END)
 }
 
-pub fn highlight_with_regex<'a>(regex: &Regex, line: &'a str) -> String {
+fn highlight_with_regex<'a>(regex: &Regex, line: &'a str) -> String {
     let mut highlighted_line = String::from(line);
 
     for mat in regex.find_iter(line) {
@@ -19,7 +19,7 @@ pub fn highlight_with_regex<'a>(regex: &Regex, line: &'a str) -> String {
     highlighted_line
 }
 
-pub fn highlight_with_substring<'a>(query: &str, line: &'a str, ignore_case: bool) -> String {
+fn highlight_with_substring<'a>(query: &str, line: &'a str, ignore_case: bool) -> String {
     let search_line = if ignore_case {
         line.to_lowercase()
     } else {
