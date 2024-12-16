@@ -1,24 +1,68 @@
 use regex::{Regex, RegexBuilder};
-use std::fs;
+
+use std::{
+    fmt,
+    fs::{self},
+    io::{self, Read},
+    path::Path,
+};
 
 const HIGHLIGHT_START: &str = "\x1b[1;33m";
 const HIGHLIGHT_END: &str = "\x1b[0m";
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub enum ApplicationError {
     NotEnoughArguments,
-    FileNotFound,
-    InvalidRegex,
+    InvalidRegex(String),
+    FileNotFound(String),
+    DirectoryReadError(String),
+    DirectoryWithoutRecursive,
+    InvalidFlag(String),
+    IOError(io::Error),
     HelpRequested,
+}
+
+impl fmt::Display for ApplicationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ApplicationError::NotEnoughArguments => {
+                write!(
+                    f,
+                    "Error: Not enough arguments provided. A query and file paths are required."
+                )
+            }
+            ApplicationError::InvalidRegex(query) => {
+                write!(f, "Error: Invalid regular expression: '{}'", query)
+            }
+            ApplicationError::FileNotFound(file) => {
+                write!(f, "Error: File '{}' not found.", file)
+            }
+            ApplicationError::DirectoryReadError(path) => {
+                write!(f, "Error reading directory '{}'.", path)
+            }
+            ApplicationError::DirectoryWithoutRecursive => {
+                write!(f, "Error: You provided a directory, but did not use the '-R' option for recursive search.")
+            }
+            ApplicationError::InvalidFlag(flag) => {
+                write!(f, "Error: Invalid flag '{}'.", flag)
+            }
+            ApplicationError::IOError(e) => write!(f, "I/O Error: {}", e),
+            ApplicationError::HelpRequested => write!(f, "Help requested."),
+        }
+    }
 }
 
 impl ApplicationError {
     pub fn handle_error(&self) {
         match self {
-            ApplicationError::NotEnoughArguments => eprintln!("Query or file paths are missing."),
-            ApplicationError::FileNotFound => eprintln!("Error locating files."),
-            ApplicationError::InvalidRegex => eprintln!("Invalid regular expression"),
             ApplicationError::HelpRequested => print_help(),
+            ApplicationError::NotEnoughArguments => eprintln!("{}", self),
+            ApplicationError::InvalidRegex(_) => eprintln!("{}", self),
+            ApplicationError::FileNotFound(_) => eprintln!("{}", self),
+            ApplicationError::InvalidFlag(_) => eprintln!("{}", self),
+            ApplicationError::IOError(_) => eprintln!("{}", self),
+            ApplicationError::DirectoryReadError(_) => eprintln!("{}", self),
+            ApplicationError::DirectoryWithoutRecursive => eprintln!("{}", self),
         }
     }
 }
@@ -31,6 +75,8 @@ pub struct Config {
     show_line_numbers: bool,
     use_regex: bool,
     enable_highlighting: bool,
+    read_from_stdin: bool,
+    recursive_search: bool,
 }
 
 impl Config {
@@ -43,6 +89,7 @@ impl Config {
         let mut show_line_numbers = false;
         let mut use_regex = false;
         let mut enable_highlighting = false;
+        let mut recursive_search = false;
         let mut query = String::new();
         let mut file_paths = Vec::new();
         let mut args_iter = args.iter().skip(1);
@@ -51,9 +98,14 @@ impl Config {
             match arg.as_str() {
                 "-i" | "--ignore-case" => ignore_case = true,
                 "-n" | "--line-numbers" => show_line_numbers = true,
+                "-R" | "--recursive" => recursive_search = true,
                 "-r" | "--use-regex" => use_regex = true,
                 "-c" | "--color" => enable_highlighting = true,
                 _ => {
+                    if arg.starts_with('-') {
+                        return Err(ApplicationError::InvalidFlag(arg.clone()));
+                    }
+
                     if query.is_empty() {
                         query = arg.clone();
                     } else {
@@ -63,13 +115,15 @@ impl Config {
             }
         }
 
-        if query.is_empty() || file_paths.is_empty() {
+        let read_from_stdin = file_paths.is_empty();
+
+        if query.is_empty() {
             return Err(ApplicationError::NotEnoughArguments);
         }
 
         if use_regex {
             if Regex::new(&query).is_err() {
-                return Err(ApplicationError::InvalidRegex);
+                return Err(ApplicationError::InvalidRegex(query.to_string()));
             }
         }
 
@@ -80,6 +134,8 @@ impl Config {
             show_line_numbers,
             use_regex,
             enable_highlighting,
+            read_from_stdin,
+            recursive_search,
         })
     }
 }
@@ -87,29 +143,100 @@ impl Config {
 pub fn run(config: Config) -> Result<(), ApplicationError> {
     let regex = compile_regex(&config.query, config.use_regex, config.ignore_case)?;
 
-    for file_path in config.file_paths {
-        let content = fs::read_to_string(&file_path).map_err(|_| ApplicationError::FileNotFound)?;
-        let results = search(&config.query, &content, config.ignore_case, &regex);
+    if config.read_from_stdin {
+        process_input("stdin", &mut io::stdin().lock(), &config, &regex)?;
+    } else {
+        for file_path in &config.file_paths {
+            let path = Path::new(file_path);
 
-        if results.is_empty() {
-            continue;
-        }
+            if path.is_dir() && !config.recursive_search {
+                return Err(ApplicationError::DirectoryWithoutRecursive);
+            }
 
-        for (line_num, line) in results {
-            let highlighted_line = if config.enable_highlighting {
-                highlight_match(&config.query, line, config.ignore_case, &regex)
+            if path.is_dir() && config.recursive_search {
+                process_directory(path, &config, &regex)?;
             } else {
-                line.to_string()
-            };
-
-            if config.show_line_numbers {
-                println!("{}:{}: {}", file_path, line_num, highlighted_line);
-            } else {
-                println!("{}:{}", file_path, highlighted_line);
+                process_file(file_path, &config, &regex)?;
             }
         }
     }
 
+    Ok(())
+}
+
+fn process_input<R: Read>(
+    source: &str,
+    reader: &mut R,
+    config: &Config,
+    regex: &Option<Regex>,
+) -> Result<(), ApplicationError> {
+    let mut input = String::new();
+
+    reader
+        .read_to_string(&mut input)
+        .map_err(|e| ApplicationError::IOError(e))?;
+
+    let results = search(&config.query, &input, config.ignore_case, regex);
+    print_results(config, source, results, regex)
+}
+
+fn process_file(
+    file_path: &str,
+    config: &Config,
+    regex: &Option<Regex>,
+) -> Result<(), ApplicationError> {
+    let content = fs::read_to_string(file_path)
+        .map_err(|_| ApplicationError::FileNotFound(file_path.to_string()))?;
+
+    let results = search(&config.query, &content, config.ignore_case, regex);
+    print_results(config, file_path, results, regex)
+}
+
+fn process_directory(
+    dir_path: &Path,
+    config: &Config,
+    regex: &Option<Regex>,
+) -> Result<(), ApplicationError> {
+    for entry in fs::read_dir(dir_path)
+        .map_err(|_| ApplicationError::FileNotFound(dir_path.to_string_lossy().to_string()))?
+    {
+        let entry = entry
+            .map_err(|_| ApplicationError::FileNotFound(dir_path.to_string_lossy().to_string()))?;
+        let path = entry.path();
+
+        if path.is_dir() {
+            process_directory(&path, config, regex)?;
+        } else {
+            process_file(path.to_str().unwrap(), config, regex)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn print_results(
+    config: &Config,
+    source: &str,
+    results: Vec<(usize, &str)>,
+    regex: &Option<Regex>,
+) -> Result<(), ApplicationError> {
+    if results.is_empty() {
+        return Ok(());
+    }
+
+    for (line_num, line) in results {
+        let highlighted_line = if config.enable_highlighting {
+            highlight_match(&config.query, line, config.ignore_case, &regex)
+        } else {
+            line.to_string()
+        };
+
+        if config.show_line_numbers {
+            println!("{}:{}: {}", source, line_num, highlighted_line);
+        } else {
+            println!("{}:{}", source, highlighted_line);
+        }
+    }
     Ok(())
 }
 
@@ -128,7 +255,7 @@ fn compile_regex(
         builder
             .build()
             .map(Some)
-            .map_err(|_| ApplicationError::InvalidRegex)
+            .map_err(|_| ApplicationError::InvalidRegex(query.to_string()))
     } else {
         Ok(None)
     }
@@ -225,13 +352,16 @@ fn print_help() {
     println!("  -i, --ignore-case       Perform case-insensitive matching");
     println!("  -n, --line-numbers      Show line numbers with output lines");
     println!("  -r, --use-regex         Treat PATTERN as a regular expression");
+    println!("  -R, --recursive         Search recursively in directories.");
     println!("  -c, --color             Highlight matching text in output");
     println!("  -h, --help              Display this help and exit");
     println!();
     println!("Examples:");
     println!("  tinygrep -i \"rust\" file1.txt       # Case-insensitive search for 'rust'");
     println!("  tinygrep -n \"error\" file1.txt      # Search for 'error' and show line numbers");
-    println!("  tinygrep -r \"R\\w+\" file1.txt       # Search for words starting with 'R' using regex");
+    println!(
+        "  tinygrep -r \"R\\w+\" file1.txt       # Search for words starting with 'R' using regex"
+    );
     println!("  tinygrep -i -n \"hello\" file1.txt file2.txt # Case-insensitive search with line numbers");
     println!();
     println!("For more information, check the documentation or run the command with -h.");
@@ -301,6 +431,24 @@ mod tests {
     }
 
     #[test]
+    fn test_invalid_flag() {
+        let args = vec![
+            "minigrep".to_string(),
+            "rust".to_string(),
+            "--unknown".to_string(),  // Invalid flag
+            "poem.txt".to_string(),
+        ];
+
+        let result = Config::new(&args);
+
+        assert!(
+            matches!(result, Err(ApplicationError::InvalidFlag(ref flag)) if flag == "--unknown"),
+            "Expected InvalidFlag error with '--unknown', but got {:?}",
+            result
+        );
+    }
+
+    #[test]
     fn test_not_enough_arguments() {
         let args = vec!["minigrep".to_string()];
         let result = Config::new(&args);
@@ -313,7 +461,7 @@ mod tests {
 
     #[test]
     fn test_missing_query_or_file_paths() {
-        let args = vec!["minigrep".to_string(), "query".to_string()];
+        let args = vec!["minigrep".to_string(), "-i".to_string()];
         let result = Config::new(&args);
         assert!(
             matches!(result, Err(ApplicationError::NotEnoughArguments)),
@@ -344,8 +492,8 @@ mod tests {
 
         let config = Config::new(&args);
         assert!(
-            matches!(config, Err(ApplicationError::InvalidRegex)),
-            "Expected InvalidRegex error, but got {:?}",
+            matches!(config, Err(ApplicationError::InvalidRegex(ref s)) if s == "[invalid"),
+            "Expected InvalidRegex error with '[invalid', but got {:?}",
             config
         );
     }
@@ -386,11 +534,13 @@ mod tests {
         let query = "[rust";
         let use_regex = true;
         let ignore_case = false;
-
+    
         let result = compile_regex(query, use_regex, ignore_case);
-
+    
         match result {
-            Err(ApplicationError::InvalidRegex) => (),
+            Err(ApplicationError::InvalidRegex(ref s)) => {
+                assert_eq!(s, "[rust"); // Expect the correct error message format
+            }
             _ => panic!(
                 "Expected Err(ApplicationError::InvalidRegex), got {:?}",
                 result
