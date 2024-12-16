@@ -72,7 +72,7 @@ target/release/tinygrep -r -i "^rust" file.txt
 
 Use the `-R` option to search recursively through all files in the specified directory and its subdirectories.
 
-```
+```bash
 target/release/tinygrep -R "pattern" ./my_directory
 ```
 
