@@ -1,6 +1,9 @@
 use regex::{Regex, RegexBuilder};
 use std::fs;
 
+const HIGHLIGHT_START: &str = "\x1b[1;33m";
+const HIGHLIGHT_END: &str = "\x1b[0m";
+
 #[derive(Debug, PartialEq)]
 pub enum ApplicationError {
     NotEnoughArguments,
@@ -27,6 +30,7 @@ pub struct Config {
     ignore_case: bool,
     show_line_numbers: bool,
     use_regex: bool,
+    enable_highlighting: bool,
 }
 
 impl Config {
@@ -38,18 +42,17 @@ impl Config {
         let mut ignore_case = false;
         let mut show_line_numbers = false;
         let mut use_regex = false;
+        let mut enable_highlighting = false;
         let mut query = String::new();
         let mut file_paths = Vec::new();
         let mut args_iter = args.iter().skip(1);
 
         while let Some(arg) = args_iter.next() {
             match arg.as_str() {
-                "--ignore-case" => ignore_case = true,
-                "--line-numbers" => show_line_numbers = true,
-                "--use-regex" => use_regex = true,
-                "-i" => ignore_case = true,
-                "-n" => show_line_numbers = true,
-                "-r" => use_regex = true,
+                "-i" | "--ignore-case" => ignore_case = true,
+                "-n" | "--line-numbers" => show_line_numbers = true,
+                "-r" | "--use-regex" => use_regex = true,
+                "-c" | "--color" => enable_highlighting = true,
                 _ => {
                     if query.is_empty() {
                         query = arg.clone();
@@ -76,6 +79,7 @@ impl Config {
             ignore_case,
             show_line_numbers,
             use_regex,
+            enable_highlighting,
         })
     }
 }
@@ -92,10 +96,16 @@ pub fn run(config: Config) -> Result<(), ApplicationError> {
         }
 
         for (line_num, line) in results {
-            if config.show_line_numbers {
-                println!("{}:{}: {}", file_path, line_num, line);
+            let highlighted_line = if config.enable_highlighting {
+                highlight_match(&config.query, line, config.ignore_case, &regex)
             } else {
-                println!("{}:{}", file_path, line);
+                line.to_string()
+            };
+
+            if config.show_line_numbers {
+                println!("{}:{}: {}", file_path, line_num, highlighted_line);
+            } else {
+                println!("{}:{}", file_path, highlighted_line);
             }
         }
     }
@@ -103,7 +113,7 @@ pub fn run(config: Config) -> Result<(), ApplicationError> {
     Ok(())
 }
 
-pub fn compile_regex(
+fn compile_regex(
     query: &str,
     use_regex: bool,
     ignore_case: bool,
@@ -153,6 +163,56 @@ fn search<'a>(
     results
 }
 
+fn apply_highlight(text: &str) -> String {
+    format!("{}{}{}", HIGHLIGHT_START, text, HIGHLIGHT_END)
+}
+
+fn highlight_with_regex<'a>(regex: &Regex, line: &'a str) -> String {
+    let mut highlighted_line = String::from(line);
+
+    for mat in regex.find_iter(line) {
+        let matched_string = &line[mat.start()..mat.end()];
+        let highlighted = apply_highlight(matched_string);
+        highlighted_line = highlighted_line.replace(matched_string, &highlighted);
+    }
+
+    highlighted_line
+}
+
+fn highlight_with_substring<'a>(query: &str, line: &'a str, ignore_case: bool) -> String {
+    let search_line = if ignore_case {
+        line.to_lowercase()
+    } else {
+        line.to_string()
+    };
+
+    if let Some(pos) = search_line.find(query) {
+        let matched_str = &line[pos..pos + query.len()];
+        let highlighted = apply_highlight(matched_str);
+        line.replace(matched_str, &highlighted)
+    } else {
+        String::from(line)
+    }
+}
+
+fn highlight_match<'a>(
+    query: &str,
+    line: &'a str,
+    ignore_case: bool,
+    regex: &Option<Regex>,
+) -> String {
+    if let Some(regex) = regex {
+        highlight_with_regex(regex, line)
+    } else {
+        let query = if ignore_case {
+            query.to_lowercase()
+        } else {
+            query.to_string()
+        };
+        highlight_with_substring(&query, line, ignore_case)
+    }
+}
+
 fn print_help() {
     println!("TinyGrep - A simplified version of the `grep` command");
     println!();
@@ -164,13 +224,15 @@ fn print_help() {
     println!("Options:");
     println!("  -i, --ignore-case       Perform case-insensitive matching");
     println!("  -n, --line-numbers      Show line numbers with output lines");
-    println!("  -r, --use-regex         Show line numbers with output lines");
+    println!("  -r, --use-regex         Treat PATTERN as a regular expression");
+    println!("  -c, --color             Highlight matching text in output");
     println!("  -h, --help              Display this help and exit");
     println!();
     println!("Examples:");
-    println!("  tinygrep -i \"rust\" poem.txt");
-    println!("  tinygrep -n \"error\" log.txt");
-    println!("  tinygrep \"hello\" file1.txt file2.txt");
+    println!("  tinygrep -i \"rust\" file1.txt       # Case-insensitive search for 'rust'");
+    println!("  tinygrep -n \"error\" file1.txt      # Search for 'error' and show line numbers");
+    println!("  tinygrep -r \"R\\w+\" file1.txt       # Search for words starting with 'R' using regex");
+    println!("  tinygrep -i -n \"hello\" file1.txt file2.txt # Case-insensitive search with line numbers");
     println!();
     println!("For more information, check the documentation or run the command with -h.");
 }
@@ -180,7 +242,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn valid_config() {
+    fn test_valid_config() {
         let args = vec![
             "minigrep".to_string(),
             "rust".to_string(),
@@ -193,15 +255,17 @@ mod tests {
         assert!(!config.ignore_case);
         assert!(!config.show_line_numbers);
         assert!(!config.use_regex);
+        assert!(!config.enable_highlighting);
     }
 
     #[test]
-    fn config_with_flags() {
+    fn test_config_with_flags() {
         let args = vec![
             "minigrep".to_string(),
             "-i".to_string(),
             "-n".to_string(),
             "-r".to_string(),
+            "-c".to_string(),
             "rust".to_string(),
             "poem.txt".to_string(),
         ];
@@ -212,15 +276,17 @@ mod tests {
         assert!(config.ignore_case);
         assert!(config.show_line_numbers);
         assert!(config.use_regex);
+        assert!(config.enable_highlighting);
     }
 
     #[test]
-    fn config_with_long_flags() {
+    fn test_config_with_long_flags() {
         let args = vec![
             "minigrep".to_string(),
             "--ignore-case".to_string(),
             "--line-numbers".to_string(),
             "--use-regex".to_string(),
+            "--color".to_string(),
             "rust".to_string(),
             "poem.txt".to_string(),
         ];
@@ -231,10 +297,11 @@ mod tests {
         assert!(config.ignore_case);
         assert!(config.show_line_numbers);
         assert!(config.use_regex);
+        assert!(config.enable_highlighting);
     }
 
     #[test]
-    fn not_enough_arguments() {
+    fn test_not_enough_arguments() {
         let args = vec!["minigrep".to_string()];
         let result = Config::new(&args);
         assert!(
@@ -245,7 +312,7 @@ mod tests {
     }
 
     #[test]
-    fn missing_query_or_file_paths() {
+    fn test_missing_query_or_file_paths() {
         let args = vec!["minigrep".to_string(), "query".to_string()];
         let result = Config::new(&args);
         assert!(
@@ -256,7 +323,7 @@ mod tests {
     }
 
     #[test]
-    fn help_requested() {
+    fn test_help_requested() {
         let args = vec!["minigrep".to_string(), "--help".to_string()];
         let result = Config::new(&args);
         assert!(
@@ -267,7 +334,7 @@ mod tests {
     }
 
     #[test]
-    fn invalid_regex() {
+    fn test_invalid_regex() {
         let args = vec![
             "minigrep".to_string(),
             "-r".to_string(),
@@ -284,7 +351,7 @@ mod tests {
     }
 
     #[test]
-    fn compile_regex_no_regex() {
+    fn test_compile_regex_no_regex() {
         let query = "rust";
         let use_regex = false;
         let ignore_case = false;
@@ -298,7 +365,7 @@ mod tests {
     }
 
     #[test]
-    fn compile_regex_valid_regex() {
+    fn test_compile_regex_valid_regex() {
         let query = "rust.*";
         let use_regex = true;
         let ignore_case = false;
@@ -315,7 +382,7 @@ mod tests {
     }
 
     #[test]
-    fn compile_regex_invalid_regex() {
+    fn test_compile_regex_invalid_regex() {
         let query = "[rust";
         let use_regex = true;
         let ignore_case = false;
@@ -324,12 +391,15 @@ mod tests {
 
         match result {
             Err(ApplicationError::InvalidRegex) => (),
-            _ => panic!("Expected Err(ApplicationError::InvalidRegex), got {:?}", result),
+            _ => panic!(
+                "Expected Err(ApplicationError::InvalidRegex), got {:?}",
+                result
+            ),
         }
     }
 
     #[test]
-    fn compile_regex_case_insensitive() {
+    fn test_compile_regex_case_insensitive() {
         let query = "rust.*";
         let use_regex = true;
         let ignore_case = true;
@@ -348,13 +418,13 @@ mod tests {
     }
 
     #[test]
-    fn compile_regex_case_sensitive() {
+    fn test_compile_regex_case_sensitive() {
         let query = "Rust.*";
         let use_regex = true;
         let ignore_case = false;
-    
+
         let result = compile_regex(query, use_regex, ignore_case);
-    
+
         match result {
             Ok(Some(regex)) => {
                 assert!(regex.is_match("Rusty nails"));
@@ -365,7 +435,7 @@ mod tests {
     }
 
     #[test]
-    fn compare_lines_case_sensitive() {
+    fn test_compare_lines_case_sensitive() {
         let query = "duct";
         let line = "duct tape";
         assert!(compare_lines(query, line, false, &None));
@@ -374,7 +444,7 @@ mod tests {
     }
 
     #[test]
-    fn compare_lines_case_insensitive() {
+    fn test_compare_lines_case_insensitive() {
         let query = "rUsT";
         let line = "Rust is great";
         assert!(compare_lines(query, line, true, &None));
@@ -383,18 +453,20 @@ mod tests {
     }
 
     #[test]
-    fn compare_lines_with_regex() {
+    fn test_compare_lines_with_regex() {
         let query = "^Rust";
         let use_regex = true;
         let ignore_case = false;
-        
-        let regex = compile_regex(query, use_regex, ignore_case).unwrap().unwrap();
+
+        let regex = compile_regex(query, use_regex, ignore_case)
+            .unwrap()
+            .unwrap();
         let line = "Rust is great";
         assert!(compare_lines("Rust", line, false, &Some(regex)));
     }
 
     #[test]
-    fn case_sensitive() {
+    fn test_case_sensitive() {
         let query = "duct";
         let content = "\
 Rust:
@@ -409,7 +481,7 @@ Duct tape.";
     }
 
     #[test]
-    fn case_insensitive() {
+    fn test_case_insensitive() {
         let query = "rUsT";
         let content = "\
 Rust:
@@ -424,7 +496,7 @@ Trust me.";
     }
 
     #[test]
-    fn regex_search_case_sensitive() {
+    fn test_regex_search_case_sensitive() {
         let query = "Rust.*";
         let content = "\
 Rust:
@@ -440,7 +512,7 @@ Rusty nails.";
     }
 
     #[test]
-    fn regex_search_case_insensitive() {
+    fn test_regex_search_case_insensitive() {
         let query = "(?i)rust.*";
         let content = "\
 Rust:
@@ -453,5 +525,54 @@ Rusty nails.";
             vec![(1, "Rust:"), (4, "Rusty nails.")],
             search(query, content, false, &Some(regex))
         );
+    }
+
+    #[test]
+    fn test_apply_highlight() {
+        let input = "Rust is powerful";
+        let expected = "\x1b[1;33mRust is powerful\x1b[0m";
+        let result = apply_highlight(input);
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_highlight_with_regex() {
+        let regex = Regex::new(r"R\w+").unwrap();
+        let input = "Rust is powerful, and Rocks are heavy.";
+        let expected = "\x1b[1;33mRust\x1b[0m is powerful, and \x1b[1;33mRocks\x1b[0m are heavy.";
+
+        let result = highlight_with_regex(&regex, input);
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_highlight_with_substring_case_sensitive() {
+        let input = "Rust is powerful, Rocks are heavy.";
+        let query = "Rust";
+        let expected = "\x1b[1;33mRust\x1b[0m is powerful, Rocks are heavy.";
+
+        let result = highlight_with_substring(query, input, false);
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_highlight_with_substring_case_insensitive() {
+        let input = "Rust is powerful, Rocks are heavy.";
+        let query = "rust";
+        let expected = "\u{1b}[1;33mRust\u{1b}[0m is powerful, Rocks are heavy.";
+
+        let result = highlight_with_substring(query, input, true);
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_highlight_match_with_regex() {
+        let query = "R\\w+";
+        let regex = Regex::new(query).unwrap();
+        let input = "Rust is powerful, and Rocks are heavy.";
+        let expected = "\x1b[1;33mRust\x1b[0m is powerful, and \x1b[1;33mRocks\x1b[0m are heavy.";
+
+        let result = highlight_match(query, input, false, &Some(regex));
+        assert_eq!(result, expected);
     }
 }
