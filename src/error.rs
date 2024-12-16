@@ -88,7 +88,6 @@ fn print_help() {
 mod tests {
     use super::*;
 
-    // Test the Display implementation for various errors
     #[test]
     fn test_display_not_enough_arguments() {
         let err = ApplicationError::NotEnoughArguments;

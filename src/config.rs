@@ -142,7 +142,7 @@ mod tests {
         let args = vec![
             "minigrep".to_string(),
             "rust".to_string(),
-            "--unknown".to_string(), // Invalid flag
+            "--unknown".to_string(),
             "poem.txt".to_string(),
         ];
 

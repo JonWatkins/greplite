@@ -76,7 +76,7 @@ mod tests {
 
         match result {
             Err(ApplicationError::InvalidRegex(ref s)) => {
-                assert_eq!(s, "[rust"); // Expect the correct error message format
+                assert_eq!(s, "[rust");
             }
             _ => panic!(
                 "Expected Err(ApplicationError::InvalidRegex), got {:?}",
