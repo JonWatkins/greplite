@@ -3,7 +3,7 @@ name: Build and Release
 on:
   push:
     tags:
-      - 'v*'
+      - 'v*'  # Trigger on version tags like v1.0.0, v2.1.0, etc.
 
 jobs:
   build:
@@ -17,6 +17,11 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
 
+    - name: Set up Rust toolchain
+      uses: actions/setup-rust@v1
+      with:
+        toolchain: stable
+
     - name: Add target
       run: rustup target add ${{ matrix.target }}
 
@@ -24,16 +29,24 @@ jobs:
       if: matrix.target == 'x86_64-pc-windows-gnu'
       run: |
         sudo apt-get update
-        sudo apt-get install -y mingw-w64      
+        sudo apt-get install -y mingw-w64
 
-    - name: Install dependencies for macOS targets
+    - name: Install macOS cross-compilation dependencies
       if: matrix.target == 'x86_64-apple-darwin' || matrix.target == 'aarch64-apple-darwin'
       run: |
         sudo apt-get update
-        sudo apt-get install -y clang lld libclang-dev        
+        sudo apt-get install -y clang lld libclang-dev gcc-multilib
+        curl https://sh.rustup.rs -sSf | sh
+        source $HOME/.cargo/env
+        cargo install cargo-xbuild
 
     - name: Build for ${{ matrix.target }}
-      run: cargo build --release --target ${{ matrix.target }}
+      run: |
+        if [[ "${{ matrix.target }}" == "x86_64-apple-darwin" || "${{ matrix.target }}" == "aarch64-apple-darwin" ]]; then
+          cargo xbuild --release --target ${{ matrix.target }}
+        else
+          cargo build --release --target ${{ matrix.target }}
+        fi
 
     - name: Archive build artifacts
       if: success()
