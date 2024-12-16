@@ -166,7 +166,11 @@ mod tests {
     fn not_enough_arguments() {
         let args = vec!["minigrep".to_string()];
         let result = Config::new(&args);
-        assert!(matches!(result, Err(ApplicationError::NotEnoughArguments)));
+        assert!(
+            matches!(result, Err(ApplicationError::NotEnoughArguments)),
+            "Expected NotEnoughArguments error, but got {:?}",
+            result
+        );
     }
 
     #[test]
@@ -175,7 +179,7 @@ mod tests {
         let result = Config::new(&args);
         assert!(
             matches!(result, Err(ApplicationError::NotEnoughArguments)),
-            "Expected MissingQueryOrFilePaths error, but got {:?}",
+            "Expected NotEnoughArguments error, but got {:?}",
             result
         );
     }
@@ -184,7 +188,11 @@ mod tests {
     fn help_requested() {
         let args = vec!["minigrep".to_string(), "--help".to_string()];
         let result = Config::new(&args);
-        assert!(matches!(result, Err(ApplicationError::HelpRequested)));
+        assert!(
+            matches!(result, Err(ApplicationError::HelpRequested)),
+            "Expected HelpRequested error, but got {:?}",
+            result
+        );
     }
 
     #[test]
