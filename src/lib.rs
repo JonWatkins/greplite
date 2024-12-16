@@ -1,9 +1,11 @@
+use regex::{Regex, RegexBuilder};
 use std::fs;
 
 #[derive(Debug, PartialEq)]
 pub enum ApplicationError {
     NotEnoughArguments,
     FileNotFound,
+    InvalidRegex,
     HelpRequested,
 }
 
@@ -12,6 +14,7 @@ impl ApplicationError {
         match self {
             ApplicationError::NotEnoughArguments => eprintln!("Query or file paths are missing."),
             ApplicationError::FileNotFound => eprintln!("Error locating files."),
+            ApplicationError::InvalidRegex => eprintln!("Invalid regular expression"),
             ApplicationError::HelpRequested => print_help(),
         }
     }
@@ -23,6 +26,7 @@ pub struct Config {
     file_paths: Vec<String>,
     ignore_case: bool,
     show_line_numbers: bool,
+    use_regex: bool,
 }
 
 impl Config {
@@ -33,14 +37,19 @@ impl Config {
 
         let mut ignore_case = false;
         let mut show_line_numbers = false;
+        let mut use_regex = false;
         let mut query = String::new();
         let mut file_paths = Vec::new();
         let mut args_iter = args.iter().skip(1);
 
         while let Some(arg) = args_iter.next() {
             match arg.as_str() {
+                "--ignore-case" => ignore_case = true,
+                "--line-numbers" => show_line_numbers = true,
+                "--use-regex" => use_regex = true,
                 "-i" => ignore_case = true,
                 "-n" => show_line_numbers = true,
+                "-r" => use_regex = true,
                 _ => {
                     if query.is_empty() {
                         query = arg.clone();
@@ -55,21 +64,28 @@ impl Config {
             return Err(ApplicationError::NotEnoughArguments);
         }
 
+        if use_regex {
+            if Regex::new(&query).is_err() {
+                return Err(ApplicationError::InvalidRegex);
+            }
+        }
+
         Ok(Config {
             query,
             file_paths,
             ignore_case,
             show_line_numbers,
+            use_regex,
         })
     }
 }
 
 pub fn run(config: Config) -> Result<(), ApplicationError> {
-    for file_path in config.file_paths {
-        println!("File: {}", file_path);
+    let regex = compile_regex(&config.query, config.use_regex, config.ignore_case)?;
 
-        let content = fs::read_to_string(file_path).map_err(|_| ApplicationError::FileNotFound)?;
-        let results = search(&config.query, &content, config.ignore_case);
+    for file_path in config.file_paths {
+        let content = fs::read_to_string(&file_path).map_err(|_| ApplicationError::FileNotFound)?;
+        let results = search(&config.query, &content, config.ignore_case, &regex);
 
         if results.is_empty() {
             continue;
@@ -77,31 +93,59 @@ pub fn run(config: Config) -> Result<(), ApplicationError> {
 
         for (line_num, line) in results {
             if config.show_line_numbers {
-                println!("{}: {}", line_num, line);
+                println!("{}:{}: {}", file_path, line_num, line);
             } else {
-                println!("{}", line);
+                println!("{}:{}", file_path, line);
             }
         }
-
-        println!();
     }
 
     Ok(())
 }
 
-fn compare_lines(query: &str, line: &str, ignore_case: bool) -> bool {
-    if ignore_case {
-        line.to_lowercase().contains(&query.to_lowercase())
+pub fn compile_regex(
+    query: &str,
+    use_regex: bool,
+    ignore_case: bool,
+) -> Result<Option<Regex>, ApplicationError> {
+    if use_regex {
+        let mut builder = RegexBuilder::new(query);
+
+        if ignore_case {
+            builder.case_insensitive(true);
+        }
+
+        builder
+            .build()
+            .map(Some)
+            .map_err(|_| ApplicationError::InvalidRegex)
     } else {
-        line.contains(query)
+        Ok(None)
     }
 }
 
-fn search<'a>(query: &str, content: &'a str, ignore_case: bool) -> Vec<(usize, &'a str)> {
+fn compare_lines(query: &str, line: &str, ignore_case: bool, regex: &Option<Regex>) -> bool {
+    if let Some(regex) = regex {
+        regex.is_match(line)
+    } else {
+        if ignore_case {
+            line.to_lowercase().contains(&query.to_lowercase())
+        } else {
+            line.contains(query)
+        }
+    }
+}
+
+fn search<'a>(
+    query: &str,
+    content: &'a str,
+    ignore_case: bool,
+    regex: &Option<Regex>,
+) -> Vec<(usize, &'a str)> {
     let mut results = Vec::new();
 
     for (line_num, line) in content.lines().enumerate() {
-        if compare_lines(query, line, ignore_case) {
+        if compare_lines(query, line, ignore_case, regex) {
             results.push((line_num + 1, line));
         }
     }
@@ -120,6 +164,7 @@ fn print_help() {
     println!("Options:");
     println!("  -i, --ignore-case       Perform case-insensitive matching");
     println!("  -n, --line-numbers      Show line numbers with output lines");
+    println!("  -r, --use-regex         Show line numbers with output lines");
     println!("  -h, --help              Display this help and exit");
     println!();
     println!("Examples:");
@@ -147,6 +192,7 @@ mod tests {
         assert_eq!(config.file_paths, vec!["poem.txt".to_string()]);
         assert!(!config.ignore_case);
         assert!(!config.show_line_numbers);
+        assert!(!config.use_regex);
     }
 
     #[test]
@@ -155,6 +201,7 @@ mod tests {
             "minigrep".to_string(),
             "-i".to_string(),
             "-n".to_string(),
+            "-r".to_string(),
             "rust".to_string(),
             "poem.txt".to_string(),
         ];
@@ -164,6 +211,26 @@ mod tests {
         assert_eq!(config.file_paths, vec!["poem.txt".to_string()]);
         assert!(config.ignore_case);
         assert!(config.show_line_numbers);
+        assert!(config.use_regex);
+    }
+
+    #[test]
+    fn config_with_long_flags() {
+        let args = vec![
+            "minigrep".to_string(),
+            "--ignore-case".to_string(),
+            "--line-numbers".to_string(),
+            "--use-regex".to_string(),
+            "rust".to_string(),
+            "poem.txt".to_string(),
+        ];
+
+        let config = Config::new(&args).unwrap();
+        assert_eq!(config.query, "rust");
+        assert_eq!(config.file_paths, vec!["poem.txt".to_string()]);
+        assert!(config.ignore_case);
+        assert!(config.show_line_numbers);
+        assert!(config.use_regex);
     }
 
     #[test]
@@ -200,21 +267,130 @@ mod tests {
     }
 
     #[test]
+    fn invalid_regex() {
+        let args = vec![
+            "minigrep".to_string(),
+            "-r".to_string(),
+            "[invalid".to_string(),
+            "poem.txt".to_string(),
+        ];
+
+        let config = Config::new(&args);
+        assert!(
+            matches!(config, Err(ApplicationError::InvalidRegex)),
+            "Expected InvalidRegex error, but got {:?}",
+            config
+        );
+    }
+
+    #[test]
+    fn compile_regex_no_regex() {
+        let query = "rust";
+        let use_regex = false;
+        let ignore_case = false;
+
+        let result = compile_regex(query, use_regex, ignore_case);
+
+        match result {
+            Ok(None) => (),
+            _ => panic!("Expected Ok(None), got {:?}", result),
+        }
+    }
+
+    #[test]
+    fn compile_regex_valid_regex() {
+        let query = "rust.*";
+        let use_regex = true;
+        let ignore_case = false;
+
+        let result = compile_regex(query, use_regex, ignore_case);
+
+        match result {
+            Ok(Some(regex)) => {
+                assert!(!regex.is_match("Rust is great"));
+                assert!(regex.is_match("nothing about rust"));
+            }
+            _ => panic!("Expected Ok(Some(regex)), got {:?}", result),
+        }
+    }
+
+    #[test]
+    fn compile_regex_invalid_regex() {
+        let query = "[rust";
+        let use_regex = true;
+        let ignore_case = false;
+
+        let result = compile_regex(query, use_regex, ignore_case);
+
+        match result {
+            Err(ApplicationError::InvalidRegex) => (),
+            _ => panic!("Expected Err(ApplicationError::InvalidRegex), got {:?}", result),
+        }
+    }
+
+    #[test]
+    fn compile_regex_case_insensitive() {
+        let query = "rust.*";
+        let use_regex = true;
+        let ignore_case = true;
+
+        let result = compile_regex(query, use_regex, ignore_case);
+
+        match result {
+            Ok(Some(regex)) => {
+                assert!(regex.is_match("Rusty nails"));
+                assert!(regex.is_match("rusty nails"));
+                assert!(regex.is_match("nothing about rust"));
+                assert!(!regex.is_match("fast, safe, productive."));
+            }
+            _ => panic!("Expected Ok(Some(regex)), got {:?}", result),
+        }
+    }
+
+    #[test]
+    fn compile_regex_case_sensitive() {
+        let query = "Rust.*";
+        let use_regex = true;
+        let ignore_case = false;
+    
+        let result = compile_regex(query, use_regex, ignore_case);
+    
+        match result {
+            Ok(Some(regex)) => {
+                assert!(regex.is_match("Rusty nails"));
+                assert!(!regex.is_match("rusty nails"));
+            }
+            _ => panic!("Expected Ok(Some(regex)), got {:?}", result),
+        }
+    }
+
+    #[test]
     fn compare_lines_case_sensitive() {
         let query = "duct";
         let line = "duct tape";
-        assert!(compare_lines(query, line, false));
+        assert!(compare_lines(query, line, false, &None));
         let line2 = "Duct tape";
-        assert!(!compare_lines(query, line2, false));
+        assert!(!compare_lines(query, line2, false, &None));
     }
 
     #[test]
     fn compare_lines_case_insensitive() {
         let query = "rUsT";
         let line = "Rust is great";
-        assert!(compare_lines(query, line, true));
+        assert!(compare_lines(query, line, true, &None));
         let line2 = "rust is great";
-        assert!(compare_lines(query, line2, true));
+        assert!(compare_lines(query, line2, true, &None));
+    }
+
+    #[test]
+    fn compare_lines_with_regex() {
+        let query = "^Rust";
+        let use_regex = true;
+        let ignore_case = false;
+        
+        let regex = compile_regex(query, use_regex, ignore_case).unwrap().unwrap();
+        let line = "Rust is great";
+        assert!(compare_lines("Rust", line, false, &Some(regex)));
     }
 
     #[test]
@@ -228,7 +404,7 @@ Duct tape.";
 
         assert_eq!(
             vec![(2, "safe, fast, productive.")],
-            search(query, content, false)
+            search(query, content, false, &None)
         );
     }
 
@@ -243,7 +419,39 @@ Trust me.";
 
         assert_eq!(
             vec![(1, "Rust:"), (4, "Trust me.")],
-            search(query, content, true)
+            search(query, content, true, &None)
+        );
+    }
+
+    #[test]
+    fn regex_search_case_sensitive() {
+        let query = "Rust.*";
+        let content = "\
+Rust:
+safe, fast, productive.
+Pick three.
+Rusty nails.";
+
+        let regex = compile_regex(query, true, false).unwrap().unwrap();
+        assert_eq!(
+            vec![(1, "Rust:"), (4, "Rusty nails.")],
+            search(query, content, false, &Some(regex))
+        );
+    }
+
+    #[test]
+    fn regex_search_case_insensitive() {
+        let query = "(?i)rust.*";
+        let content = "\
+Rust:
+safe, fast, productive.
+Pick three.
+Rusty nails.";
+
+        let regex = compile_regex(query, true, true).unwrap().unwrap();
+        assert_eq!(
+            vec![(1, "Rust:"), (4, "Rusty nails.")],
+            search(query, content, false, &Some(regex))
         );
     }
 }
