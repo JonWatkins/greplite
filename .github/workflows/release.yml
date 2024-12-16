@@ -1,0 +1,53 @@
+name: Build and Release
+
+on:
+  release:
+    types: [created]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        target: ["x86_64-unknown-linux-gnu", "x86_64-apple-darwin", "aarch64-apple-darwin", "x86_64-pc-windows-gnu"]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Add target
+      run: rustup target add ${{ matrix.target }}
+
+    - name: Build for ${{ matrix.target }}
+      run: cargo build --release --target ${{ matrix.target }}
+
+    - name: Archive build artifacts
+      if: success()
+      run: |
+        mkdir -p artifacts/${{ matrix.target }}
+        cp target/${{ matrix.target }}/release/tinygrep artifacts/${{ matrix.target }}
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${{ matrix.target }}
+        path: artifacts/${{ matrix.target }}/tinygrep
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          artifacts/x86_64-unknown-linux-gnu/tinygrep
+          artifacts/x86_64-apple-darwin/tinygrep
+          artifacts/aarch64-apple-darwin/tinygrep
+          artifacts/x86_64-pc-windows-gnu/tinygrep
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
