@@ -23,12 +23,12 @@ jobs:
             archive: zip    
 
     steps:
-    - uses: actions/checkout@v4
-    - name: Build for ${{ matrix.target }}
-      run: cargo build --release --target ${{ matrix.target }}
-    
-    - name: Upload release binaries to GitHub
-        uses: ncipollo/release-action@v1
-        with:
-          files: |
-            target/${{ matrix.target }}/release/tinygrep-${{ matrix.target }}.${{ matrix.archive }}
+      - uses: actions/checkout@v4
+      - name: Build for ${{ matrix.target }}
+        run: cargo build --release --target ${{ matrix.target }}
+      
+      - name: Upload release binaries to GitHub
+          uses: ncipollo/release-action@v1
+          with:
+            files: |
+              target/${{ matrix.target }}/release/tinygrep-${{ matrix.target }}.${{ matrix.archive }}
