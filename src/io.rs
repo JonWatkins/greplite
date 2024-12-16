@@ -1,6 +1,6 @@
-use std::{fs, io::Read};
+use crate::{highlight::highlight_match, search::search, ApplicationError, Config};
 use regex::Regex;
-use crate::{Config, ApplicationError, search::search, highlight::highlight_match};
+use std::{fs, io::Read};
 
 pub fn process_input<R: Read>(
     source: &str,

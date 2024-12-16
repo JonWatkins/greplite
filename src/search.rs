@@ -1,22 +1,4 @@
-use regex::{Regex, RegexBuilder};
-use crate::error::ApplicationError;
-
-pub fn compile_regex(query: &str, use_regex: bool, ignore_case: bool) -> Result<Option<Regex>, ApplicationError> {
-    if use_regex {
-        let mut builder = RegexBuilder::new(query);
-
-        if ignore_case {
-            builder.case_insensitive(true);
-        }
-
-        builder
-            .build()
-            .map(Some)
-            .map_err(|_| ApplicationError::InvalidRegex(query.to_string()))
-    } else {
-        Ok(None)
-    }
-}
+use regex::Regex;
 
 pub fn compare_lines(query: &str, line: &str, ignore_case: bool, regex: &Option<Regex>) -> bool {
     if let Some(regex) = regex {
@@ -50,6 +32,8 @@ pub fn search<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::ApplicationError;
+    use crate::regex::compile_regex;
 
     #[test]
     fn test_compile_regex_no_regex() {

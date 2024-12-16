@@ -1,5 +1,5 @@
-use tinygrep::Config;
 use std::{env, process};
+use tinygrep::Config;
 
 fn main() {
     let args: Vec<String> = env::args().collect();

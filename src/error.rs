@@ -16,7 +16,10 @@ impl fmt::Display for ApplicationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ApplicationError::NotEnoughArguments => {
-                write!(f, "Error: Not enough arguments provided. A query and file paths are required.")
+                write!(
+                    f,
+                    "Error: Not enough arguments provided. A query and file paths are required."
+                )
             }
             ApplicationError::InvalidRegex(query) => {
                 write!(f, "Error: Invalid regular expression: '{}'", query)
@@ -90,7 +93,10 @@ mod tests {
     fn test_display_not_enough_arguments() {
         let err = ApplicationError::NotEnoughArguments;
         let result = format!("{}", err);
-        assert_eq!(result, "Error: Not enough arguments provided. A query and file paths are required.");
+        assert_eq!(
+            result,
+            "Error: Not enough arguments provided. A query and file paths are required."
+        );
     }
 
     #[test]

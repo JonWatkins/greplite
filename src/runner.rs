@@ -1,10 +1,10 @@
-use std::io;
 use crate::{
     config::Config,
     error::ApplicationError,
-    io::{process_input, process_file, process_directory},
-    search::compile_regex,
+    io::{process_directory, process_file, process_input},
+    regex::compile_regex,
 };
+use std::io;
 
 pub fn run(config: Config) -> Result<(), ApplicationError> {
     let regex = compile_regex(&config.query, config.use_regex, config.ignore_case)?;
