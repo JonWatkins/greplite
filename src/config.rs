@@ -37,13 +37,13 @@ impl Config {
                 "-c" | "--color" => enable_highlighting = true,
                 _ => {
                     if arg.starts_with('-') {
-                        return Err(ApplicationError::InvalidFlag(arg.clone()));
+                        return Err(ApplicationError::InvalidFlag(arg.to_string()));
                     }
 
                     if query.is_empty() {
-                        query = arg.clone();
+                        query = arg.to_string();
                     } else {
-                        file_paths.push(arg.clone());
+                        file_paths.push(arg.to_string());
                     }
                 }
             }
