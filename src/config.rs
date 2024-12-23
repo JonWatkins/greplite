@@ -1,5 +1,4 @@
 use crate::error::ApplicationError;
-use regex::Regex;
 
 #[derive(Debug, PartialEq)]
 pub struct Config {
@@ -53,12 +52,6 @@ impl Config {
 
         if query.is_empty() {
             return Err(ApplicationError::NotEnoughArguments);
-        }
-
-        if use_regex {
-            if Regex::new(&query).is_err() {
-                return Err(ApplicationError::InvalidRegex(query.to_string()));
-            }
         }
 
         Ok(Config {
@@ -185,23 +178,6 @@ mod tests {
             matches!(result, Err(ApplicationError::HelpRequested)),
             "Expected HelpRequested error, but got {:?}",
             result
-        );
-    }
-
-    #[test]
-    fn test_invalid_regex() {
-        let args = vec![
-            "minigrep".to_string(),
-            "-r".to_string(),
-            "[invalid".to_string(),
-            "poem.txt".to_string(),
-        ];
-
-        let config = Config::new(&args);
-        assert!(
-            matches!(config, Err(ApplicationError::InvalidRegex(ref s)) if s == "[invalid"),
-            "Expected InvalidRegex error with '[invalid', but got {:?}",
-            config
         );
     }
 }
