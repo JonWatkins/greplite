@@ -18,15 +18,12 @@ pub fn search<'a>(
     ignore_case: bool,
     regex: &Option<Regex>,
 ) -> Vec<(usize, &'a str)> {
-    let mut results = Vec::new();
-
-    for (line_num, line) in content.lines().enumerate() {
-        if compare_lines(query, line, ignore_case, regex) {
-            results.push((line_num + 1, line));
-        }
-    }
-
-    results
+    content
+        .lines()
+        .enumerate()
+        .filter(|(_, line)| compare_lines(query, line, ignore_case, regex))
+        .map(|(line_num, line)| (line_num + 1, line))
+        .collect()
 }
 
 #[cfg(test)]
