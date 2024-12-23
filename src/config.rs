@@ -13,11 +13,7 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn new(args: &[String]) -> Result<Config, ApplicationError> {
-        if args.contains(&"--help".to_string()) || args.contains(&"-h".to_string()) {
-            return Err(ApplicationError::HelpRequested);
-        }
-
+    pub fn build(args: impl Iterator<Item = String>) -> Result<Config, ApplicationError> {
         let mut ignore_case = false;
         let mut show_line_numbers = false;
         let mut use_regex = false;
@@ -25,10 +21,11 @@ impl Config {
         let mut recursive_search = false;
         let mut query = String::new();
         let mut file_paths = Vec::new();
-        let mut args_iter = args.iter().skip(1);
+        let mut args_iter = args.skip(1);
 
         while let Some(arg) = args_iter.next() {
             match arg.as_str() {
+                "-h" | "--help" => return Err(ApplicationError::HelpRequested),
                 "-i" | "--ignore-case" => ignore_case = true,
                 "-n" | "--line-numbers" => show_line_numbers = true,
                 "-R" | "--recursive" => recursive_search = true,
@@ -79,7 +76,7 @@ mod tests {
             "poem.txt".to_string(),
         ];
 
-        let config = Config::new(&args).unwrap();
+        let config = Config::build(args.into_iter()).unwrap();
         assert_eq!(config.query, "rust");
         assert_eq!(config.file_paths, vec!["poem.txt".to_string()]);
         assert!(!config.ignore_case);
@@ -100,7 +97,7 @@ mod tests {
             "poem.txt".to_string(),
         ];
 
-        let config = Config::new(&args).unwrap();
+        let config = Config::build(args.into_iter()).unwrap();
         assert_eq!(config.query, "rust");
         assert_eq!(config.file_paths, vec!["poem.txt".to_string()]);
         assert!(config.ignore_case);
@@ -121,7 +118,7 @@ mod tests {
             "poem.txt".to_string(),
         ];
 
-        let config = Config::new(&args).unwrap();
+        let config = Config::build(args.into_iter()).unwrap();
         assert_eq!(config.query, "rust");
         assert_eq!(config.file_paths, vec!["poem.txt".to_string()]);
         assert!(config.ignore_case);
@@ -139,7 +136,7 @@ mod tests {
             "poem.txt".to_string(),
         ];
 
-        let result = Config::new(&args);
+        let result = Config::build(args.into_iter());
 
         assert!(
             matches!(result, Err(ApplicationError::InvalidFlag(ref flag)) if flag == "--unknown"),
@@ -151,7 +148,7 @@ mod tests {
     #[test]
     fn test_not_enough_arguments() {
         let args = vec!["minigrep".to_string()];
-        let result = Config::new(&args);
+        let result = Config::build(args.into_iter());
         assert!(
             matches!(result, Err(ApplicationError::NotEnoughArguments)),
             "Expected NotEnoughArguments error, but got {:?}",
@@ -162,7 +159,7 @@ mod tests {
     #[test]
     fn test_missing_query_or_file_paths() {
         let args = vec!["minigrep".to_string(), "-i".to_string()];
-        let result = Config::new(&args);
+        let result = Config::build(args.into_iter());
         assert!(
             matches!(result, Err(ApplicationError::NotEnoughArguments)),
             "Expected NotEnoughArguments error, but got {:?}",
@@ -173,7 +170,7 @@ mod tests {
     #[test]
     fn test_help_requested() {
         let args = vec!["minigrep".to_string(), "--help".to_string()];
-        let result = Config::new(&args);
+        let result = Config::build(args.into_iter());
         assert!(
             matches!(result, Err(ApplicationError::HelpRequested)),
             "Expected HelpRequested error, but got {:?}",
