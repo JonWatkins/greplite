@@ -4,6 +4,13 @@ version = "0.2.0"
 edition = "2021"
 license = "MIT"
 description = "A simple implementation of the `grep` command."
+repository = "https://github.com/JonWatkins/greplite"
+keywords = ["cli", "grep", "words", "search"]
+categories = ["command-line-utilities"]
 
 [dependencies]
 regex = "1.11.1"
+
+[[bin]]
+name = "greplite"
+path = "src/main.rs"
