@@ -58,10 +58,10 @@ impl ApplicationError {
 }
 
 fn print_help() {
-    println!("TinyGrep - A simplified version of the `grep` command");
+    println!("Greplite - A simplified version of the `grep` command");
     println!();
     println!("Usage:");
-    println!("  tinygrep [OPTION]... PATTERN [FILE]...");
+    println!("  greplite [OPTION]... PATTERN [FILE]...");
     println!();
     println!("Search for PATTERN in each FILE or standard input.");
     println!();
@@ -74,12 +74,12 @@ fn print_help() {
     println!("  -h, --help              Display this help and exit");
     println!();
     println!("Examples:");
-    println!("  tinygrep -i \"rust\" file1.txt       # Case-insensitive search for 'rust'");
-    println!("  tinygrep -n \"error\" file1.txt      # Search for 'error' and show line numbers");
+    println!("  greplite -i \"rust\" file1.txt       # Case-insensitive search for 'rust'");
+    println!("  greplite -n \"error\" file1.txt      # Search for 'error' and show line numbers");
     println!(
-        "  tinygrep -r \"R\\w+\" file1.txt       # Search for words starting with 'R' using regex"
+        "  greplite -r \"R\\w+\" file1.txt       # Search for words starting with 'R' using regex"
     );
-    println!("  tinygrep -i -n \"hello\" file1.txt file2.txt # Case-insensitive search with line numbers");
+    println!("  greplite -i -n \"hello\" file1.txt file2.txt # Case-insensitive search with line numbers");
     println!();
     println!("For more information, check the documentation or run the command with -h.");
 }

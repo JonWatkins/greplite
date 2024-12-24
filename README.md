@@ -1,6 +1,6 @@
-# TinyGrep
+# Greplite
 
-TinyGrep is a simplified version of the `grep` command written in Rust. It allows you to search for a pattern within 
+`greplite` is a simplified version of the `grep` command written in Rust. It allows you to search for a pattern within 
 files, with support for case-insensitive searching and line numbers. This is my modified version of the minigrep
 implementation in the [Rust Book](https://doc.rust-lang.org).
 
@@ -13,7 +13,7 @@ implementation in the [Rust Book](https://doc.rust-lang.org).
 * Recursive Search: Use the `-R` option to search files in subdirectories.
 * Highlight Matching Text: Use the `-c` option to highlight matching text in the output.
 * Help: Use the `-h` option to display help and usage information.
-* Pipe Support: Pass input through pipes from other commands, allowing you to use TinyGrep in conjunction with other 
+* Pipe Support: Pass input through pipes from other commands, allowing you to use `greplite` in conjunction with other 
   Unix-like tools.
 
 ## Example usage
@@ -23,7 +23,7 @@ implementation in the [Rust Book](https://doc.rust-lang.org).
 Search for the pattern "rust" in a file:
 
 ```bash
-tinygrep "rust" file.txt
+greplite "rust" file.txt
 ```
 
 ### 2. Case-insensitive Search
@@ -31,7 +31,7 @@ tinygrep "rust" file.txt
 Perform a case-insensitive search using the `-i` option:
 
 ```bash
-tinygrep -i "rust" file.txt
+greplite -i "rust" file.txt
 ```
 
 ### 3. Search with Line Numbers
@@ -39,7 +39,7 @@ tinygrep -i "rust" file.txt
 Show line numbers of the matching lines using the `-n` option:
 
 ```bash
-tinygrep -n "error" log.txt
+greplite -n "error" log.txt
 ```
 
 ### 4. Search Across Multiple Files
@@ -47,22 +47,22 @@ tinygrep -n "error" log.txt
 Search in multiple files:
 
 ```bash
-tinygrep "hello" file1.txt file2.txt
+greplite "hello" file1.txt file2.txt
 ```
 
 ### 5. Search Using Regular Expressions
 
-TinyGrep supports regular expressions with the `-r` option. For example, to search for lines starting with "Rust" 
+`greplite` supports regular expressions with the `-r` option. For example, to search for lines starting with "Rust" 
 (case-sensitive), you can use:
 
 ```bash
-tinygrep -r "^Rust" file.txt
+greplite -r "^Rust" file.txt
 ```
 
 To make the regex search case-insensitive, use both -r and -i:
 
 ```bash
-tinygrep -r -i "^rust" file.txt
+greplite -r -i "^rust" file.txt
 ```
 
 ### 6. Recursive Search in Directories
@@ -70,28 +70,28 @@ tinygrep -r -i "^rust" file.txt
 Use the `-R` option to search recursively through all files in the specified directory and its subdirectories.
 
 ```bash
-tinygrep -R "pattern" ./my_directory
+greplite -R "pattern" ./my_directory
 ```
 
-### 7. Piping Output into TinyGrep
+### 7. Piping Output into greplite
 
-TinyGrep can also be used in combination with commands like cat, echo, or even complex command pipelines. For 
+`greplite` can also be used in combination with commands like cat, echo, or even complex command pipelines. For 
 instance, if you want to search for a specific string in a file after filtering the contents with grep, you can 
 chain the commands like this:
 
 ```bash
-cat file.txt | tinygrep "pattern"
+cat file.txt | greplite "pattern"
 ```
 
-Using TinyGrep in a Pipeline with Other Filters:
+Using greplite in a Pipeline with Other Filters:
 
 ```bash
-cat large_log.txt | tinygrep -i "error" | sort | uniq
+cat large_log.txt | greplite -i "error" | sort | uniq
 ```
 
 ### 8. Display Help
 
 To see the available options and usage instructions, run the command with the `-h` option:
 ```bash
-tinygrep -h
+greplite -h
 ```
